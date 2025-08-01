@@ -44,6 +44,7 @@ import { CopilotMessages, MessagesTapProvider } from "./copilot-messages";
 import { ToastProvider } from "../toast/toast-provider";
 import { getErrorActions, UsageBanner } from "../usage-banner";
 import { useCopilotRuntimeClient } from "../../hooks/use-copilot-runtime-client";
+import { useCopilotAguiClient } from "../../hooks/use-copilot-agui-client";
 import { shouldShowDevConsole } from "../../utils";
 import { CopilotErrorBoundary } from "../error-boundary/error-boundary";
 import { Agent, ExtensionsInput } from "@copilotkit/runtime-client-gql";
@@ -267,6 +268,9 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     };
   }, [copilotApiConfig.headers, copilotApiConfig.publicApiKey, authStates]);
 
+  // Determine connection mode
+  const isAguiMode = !!props.aguiUrl;
+
   const runtimeClient = useCopilotRuntimeClient({
     url: copilotApiConfig.chatApiEndpoint,
     publicApiKey: copilotApiConfig.publicApiKey,
@@ -274,6 +278,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     credentials: copilotApiConfig.credentials,
     showDevConsole: shouldShowDevConsole(props.showDevConsole),
     onError: props.onError,
+    enabled: !isAguiMode, // Only create runtime client if not in agui mode
   });
 
   const [chatSuggestionConfiguration, setChatSuggestionConfiguration] = useState<{
@@ -320,6 +325,11 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     if (hasLoadedAgents.current) return;
 
     const fetchData = async () => {
+      if (!runtimeClient) {
+        console.warn("Runtime client not available, skipping available agents fetch");
+        hasLoadedAgents.current = true;
+        return;
+      }
       const result = await runtimeClient.availableAgents();
       if (result.data?.availableAgents) {
         setAvailableAgents(result.data.availableAgents.agents);
@@ -366,6 +376,18 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
       setInternalThreadId(props.threadId);
     }
   }, [props.threadId]);
+
+  // Create ag_ui client if in agui mode
+  const { aguiClient, errorSubscriber } = useCopilotAguiClient({
+    url: props.aguiUrl || "",
+    headers,
+    credentials: copilotApiConfig.credentials,
+    showDevConsole: shouldShowDevConsole(props.showDevConsole),
+    onError: props.onError,
+    agentId: props.agent,
+    threadId: internalThreadId,
+    enabled: isAguiMode, // Only create agui client if in agui mode
+  });
 
   const [runId, setRunId] = useState<string | null>(null);
 
@@ -469,6 +491,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
         agentSession,
         setAgentSession,
         runtimeClient,
+        aguiClient,
         forwardedParameters,
         agentLock,
         threadId: internalThreadId,
@@ -544,8 +567,12 @@ function formatFeatureName(featureName: string): string {
 function validateProps(props: CopilotKitProps): never | void {
   const cloudFeatures = Object.keys(props).filter((key) => key.endsWith("_c"));
 
-  if (!props.runtimeUrl && !props.publicApiKey) {
-    throw new ConfigurationError("Missing required prop: 'runtimeUrl' or 'publicApiKey'");
+  if (!props.runtimeUrl && !props.publicApiKey && !props.aguiUrl) {
+    throw new ConfigurationError("Missing required prop: 'runtimeUrl', 'aguiUrl', or 'publicApiKey'");
+  }
+
+  if (props.runtimeUrl && props.aguiUrl) {
+    throw new ConfigurationError("Cannot specify both 'runtimeUrl' and 'aguiUrl'. Choose one connection method.");
   }
 
   if (cloudFeatures.length > 0 && !props.publicApiKey) {
@@ -554,5 +581,9 @@ function validateProps(props: CopilotKitProps): never | void {
         .map(formatFeatureName)
         .join(", ")}`,
     );
+  }
+
+  if (props.aguiUrl && props.publicApiKey) {
+    throw new ConfigurationError("Cannot use cloud features with direct ag_ui server connection. Use 'runtimeUrl' for cloud features.");
   }
 }

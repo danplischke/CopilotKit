@@ -20,11 +20,12 @@ import { shouldShowDevConsole } from "../utils/dev-console";
 export interface CopilotRuntimeClientHookOptions extends CopilotRuntimeClientOptions {
   showDevConsole?: boolean;
   onError?: CopilotErrorHandler;
+  enabled?: boolean;
 }
 
 export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions) => {
   const { setBannerError } = useToast();
-  const { showDevConsole, onError, ...runtimeOptions } = options;
+  const { showDevConsole, onError, enabled = true, ...runtimeOptions } = options;
 
   // Deduplication state for structured errors
   const lastStructuredErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
@@ -60,6 +61,10 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
   };
 
   const runtimeClient = useMemo(() => {
+    if (!enabled) {
+      return null;
+    }
+    
     return new CopilotRuntimeClient({
       ...runtimeOptions,
       handleGQLErrors: (error) => {
@@ -141,7 +146,7 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
         setBannerError(warningError);
       },
     });
-  }, [runtimeOptions, setBannerError, showDevConsole, onError]);
+  }, [runtimeOptions, setBannerError, showDevConsole, onError, enabled]);
 
   return runtimeClient;
 };

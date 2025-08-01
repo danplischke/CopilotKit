@@ -361,6 +361,10 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
       const isAgentRun = agentSessionRef.current !== null;
 
+      if (!runtimeClient) {
+        throw new Error("Runtime client not available");
+      }
+
       const stream = runtimeClient.asStream(
         runtimeClient.generateCopilotResponse({
           data: {
