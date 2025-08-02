@@ -45,6 +45,7 @@ import { ToastProvider } from "../toast/toast-provider";
 import { getErrorActions, UsageBanner } from "../usage-banner";
 import { useCopilotRuntimeClient } from "../../hooks/use-copilot-runtime-client";
 import { useCopilotAguiClient } from "../../hooks/use-copilot-agui-client";
+import { useCopilotAguiClients } from "../../hooks/use-copilot-agui-clients";
 import { shouldShowDevConsole } from "../../utils";
 import { CopilotErrorBoundary } from "../error-boundary/error-boundary";
 import { Agent, ExtensionsInput } from "@copilotkit/runtime-client-gql";
@@ -269,7 +270,8 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
   }, [copilotApiConfig.headers, copilotApiConfig.publicApiKey, authStates]);
 
   // Determine connection mode
-  const isAguiMode = !!props.aguiUrl;
+  const isAguiMode = !!(props.aguiUrl || props.aguiEndpoints);
+  const isMultipleAguiMode = !!props.aguiEndpoints;
 
   const runtimeClient = useCopilotRuntimeClient({
     url: copilotApiConfig.chatApiEndpoint,
@@ -377,7 +379,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     }
   }, [props.threadId]);
 
-  // Create ag_ui client if in agui mode
+  // Create ag_ui client(s) if in agui mode
   const { aguiClient, errorSubscriber } = useCopilotAguiClient({
     url: props.aguiUrl || "",
     headers,
@@ -386,8 +388,28 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     onError: props.onError,
     agentId: props.agent,
     threadId: internalThreadId,
-    enabled: isAguiMode, // Only create agui client if in agui mode
+    enabled: !isMultipleAguiMode && !!props.aguiUrl, // Only for single agui mode
   });
+
+  // Create multiple ag_ui clients if using aguiEndpoints
+  const { aguiClients, getClientForAgent } = useCopilotAguiClients({
+    endpoints: props.aguiEndpoints || {},
+    headers,
+    credentials: copilotApiConfig.credentials,
+    showDevConsole: shouldShowDevConsole(props.showDevConsole),
+    onError: props.onError,
+    threadId: internalThreadId,
+    enabled: isMultipleAguiMode, // Only for multiple agui mode
+  });
+
+  // Helper function to get the appropriate ag_ui client for an agent
+  const getAguiClientForAgent = useCallback((agentName?: string) => {
+    if (isMultipleAguiMode) {
+      return getClientForAgent(agentName);
+    } else {
+      return aguiClient;
+    }
+  }, [isMultipleAguiMode, getClientForAgent, aguiClient]);
 
   const [runId, setRunId] = useState<string | null>(null);
 
@@ -492,6 +514,8 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
         setAgentSession,
         runtimeClient,
         aguiClient,
+        aguiClients: isMultipleAguiMode ? aguiClients : null,
+        getAguiClientForAgent,
         forwardedParameters,
         agentLock,
         threadId: internalThreadId,
@@ -567,12 +591,13 @@ function formatFeatureName(featureName: string): string {
 function validateProps(props: CopilotKitProps): never | void {
   const cloudFeatures = Object.keys(props).filter((key) => key.endsWith("_c"));
 
-  if (!props.runtimeUrl && !props.publicApiKey && !props.aguiUrl) {
-    throw new ConfigurationError("Missing required prop: 'runtimeUrl', 'aguiUrl', or 'publicApiKey'");
+  if (!props.runtimeUrl && !props.publicApiKey && !props.aguiUrl && !props.aguiEndpoints) {
+    throw new ConfigurationError("Missing required prop: 'runtimeUrl', 'aguiUrl', 'aguiEndpoints', or 'publicApiKey'");
   }
 
-  if (props.runtimeUrl && props.aguiUrl) {
-    throw new ConfigurationError("Cannot specify both 'runtimeUrl' and 'aguiUrl'. Choose one connection method.");
+  const aguiConnectionCount = [props.runtimeUrl, props.aguiUrl, props.aguiEndpoints].filter(Boolean).length;
+  if (aguiConnectionCount > 1) {
+    throw new ConfigurationError("Cannot specify multiple connection methods. Choose one: 'runtimeUrl', 'aguiUrl', or 'aguiEndpoints'.");
   }
 
   if (cloudFeatures.length > 0 && !props.publicApiKey) {
@@ -583,7 +608,11 @@ function validateProps(props: CopilotKitProps): never | void {
     );
   }
 
-  if (props.aguiUrl && props.publicApiKey) {
+  if ((props.aguiUrl || props.aguiEndpoints) && props.publicApiKey) {
     throw new ConfigurationError("Cannot use cloud features with direct ag_ui server connection. Use 'runtimeUrl' for cloud features.");
+  }
+
+  if (props.aguiEndpoints && Object.keys(props.aguiEndpoints).length === 0) {
+    throw new ConfigurationError("aguiEndpoints cannot be empty. Provide at least one endpoint or use 'aguiUrl' for a single endpoint.");
   }
 }
