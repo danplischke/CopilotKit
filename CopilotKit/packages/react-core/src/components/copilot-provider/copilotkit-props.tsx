@@ -38,6 +38,31 @@ export interface CopilotKitProps {
   runtimeUrl?: string;
 
   /**
+   * The endpoint for a direct ag_ui server. When provided, CopilotKit will connect directly 
+   * to the ag_ui server without using the intermediate Runtime Server.
+   * This is mutually exclusive with runtimeUrl and aguiEndpoints.
+   */
+  aguiUrl?: string;
+
+  /**
+   * Multiple ag_ui server endpoints mapped by agent name. When provided, CopilotKit will 
+   * connect directly to the appropriate ag_ui server based on the agent being used.
+   * This is mutually exclusive with runtimeUrl and aguiUrl.
+   * 
+   * @example
+   * ```tsx
+   * <CopilotKit aguiEndpoints={{
+   *   "agent1": "http://localhost:8000",
+   *   "agent2": "http://localhost:8001",
+   *   "default": "http://localhost:8002"
+   * }}>
+   *   <YourApp />
+   * </CopilotKit>
+   * ```
+   */
+  aguiEndpoints?: Record<string, string>;
+
+  /**
    * The endpoint for the Copilot transcribe audio service.
    */
   transcribeAudioUrl?: string;

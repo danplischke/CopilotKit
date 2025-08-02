@@ -264,6 +264,10 @@ export function CopilotMessages({ children }: { children: ReactNode }) {
 
     const fetchMessages = async () => {
       if (!agentSession?.agentName) return;
+      if (!runtimeClient) {
+        console.warn("Runtime client not available, skipping agent state fetch");
+        return;
+      }
 
       const result = await runtimeClient.loadAgentState({
         threadId,
