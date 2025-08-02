@@ -16,16 +16,16 @@ import { CopilotChatSuggestionConfiguration } from "../types/chat-suggestion-con
 import { CoAgentStateRender, CoAgentStateRenderProps } from "../types/coagent-action";
 import { CoagentState } from "../types/coagent-state";
 import {
-  CopilotRuntimeClient,
+  Agent,
   ExtensionsInput,
   ForwardedParametersInput,
 } from "@copilotkit/runtime-client-gql";
-import { Agent } from "@copilotkit/runtime-client-gql";
 import {
   LangGraphInterruptAction,
   LangGraphInterruptActionSetter,
 } from "../types/interrupt-action";
 import { SuggestionItem } from "../utils/suggestions";
+import { UnifiedClient } from "../lib/client-factory";
 
 /**
  * Interface for the configuration of the Copilot API.
@@ -45,6 +45,11 @@ export interface CopilotApiConfig {
    * The endpoint for the chat API.
    */
   chatApiEndpoint: string;
+
+  /**
+   * The endpoint for an ag_ui server (optional alternative to runtime server).
+   */
+  aguiServerUrl?: string;
 
   /**
    * The endpoint for the Copilot transcribe audio service.
@@ -196,7 +201,7 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: CopilotRuntimeClient;
+  runtimeClient: UnifiedClient;
 
   /**
    * The forwarded parameters to use for the task.

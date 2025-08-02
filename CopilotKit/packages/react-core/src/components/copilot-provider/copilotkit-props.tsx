@@ -38,6 +38,12 @@ export interface CopilotKitProps {
   runtimeUrl?: string;
 
   /**
+   * The endpoint for an ag_ui server to connect to directly.
+   * When provided, the component will use ag_ui client instead of the runtime server.
+   */
+  aguiServerUrl?: string;
+
+  /**
    * The endpoint for the Copilot transcribe audio service.
    */
   transcribeAudioUrl?: string;

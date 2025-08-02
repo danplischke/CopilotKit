@@ -75,6 +75,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
   validateProps(cpkProps);
 
   const chatApiEndpoint = props.runtimeUrl || COPILOT_CLOUD_CHAT_URL;
+  const aguiServerUrl = props.aguiServerUrl;
 
   const [actions, setActions] = useState<Record<string, FrontendAction<any>>>({});
   const [coAgentStateRenders, setCoAgentStateRenders] = useState<
@@ -224,6 +225,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
       publicApiKey: props.publicApiKey,
       ...(cloud ? { cloud } : {}),
       chatApiEndpoint: chatApiEndpoint,
+      aguiServerUrl: aguiServerUrl,
       headers: props.headers || {},
       properties: props.properties || {},
       transcribeAudioUrl: props.transcribeAudioUrl,
@@ -239,6 +241,8 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     props.credentials,
     props.cloudRestrictToTopic,
     props.guardrails_c,
+    chatApiEndpoint,
+    aguiServerUrl,
   ]);
 
   const headers = useMemo(() => {
@@ -269,6 +273,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
 
   const runtimeClient = useCopilotRuntimeClient({
     url: copilotApiConfig.chatApiEndpoint,
+    aguiServerUrl: copilotApiConfig.aguiServerUrl,
     publicApiKey: copilotApiConfig.publicApiKey,
     headers,
     credentials: copilotApiConfig.credentials,
@@ -544,8 +549,8 @@ function formatFeatureName(featureName: string): string {
 function validateProps(props: CopilotKitProps): never | void {
   const cloudFeatures = Object.keys(props).filter((key) => key.endsWith("_c"));
 
-  if (!props.runtimeUrl && !props.publicApiKey) {
-    throw new ConfigurationError("Missing required prop: 'runtimeUrl' or 'publicApiKey'");
+  if (!props.runtimeUrl && !props.publicApiKey && !props.aguiServerUrl) {
+    throw new ConfigurationError("Missing required prop: 'runtimeUrl', 'publicApiKey', or 'aguiServerUrl'");
   }
 
   if (cloudFeatures.length > 0 && !props.publicApiKey) {

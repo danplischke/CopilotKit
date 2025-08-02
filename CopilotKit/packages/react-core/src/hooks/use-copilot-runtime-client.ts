@@ -16,15 +16,17 @@ import {
   CopilotErrorEvent,
 } from "@copilotkit/shared";
 import { shouldShowDevConsole } from "../utils/dev-console";
+import { createUnifiedClient, UnifiedClient, UnifiedClientOptions } from "../lib/client-factory";
 
 export interface CopilotRuntimeClientHookOptions extends CopilotRuntimeClientOptions {
   showDevConsole?: boolean;
   onError?: CopilotErrorHandler;
+  aguiServerUrl?: string;
 }
 
-export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions) => {
+export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions): UnifiedClient => {
   const { setBannerError } = useToast();
-  const { showDevConsole, onError, ...runtimeOptions } = options;
+  const { showDevConsole, onError, aguiServerUrl, ...runtimeOptions } = options;
 
   // Deduplication state for structured errors
   const lastStructuredErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
@@ -60,8 +62,9 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
   };
 
   const runtimeClient = useMemo(() => {
-    return new CopilotRuntimeClient({
+    const unifiedOptions: UnifiedClientOptions = {
       ...runtimeOptions,
+      aguiServerUrl,
       handleGQLErrors: (error) => {
         if ((error as any).graphQLErrors?.length) {
           const graphQLErrors = (error as any).graphQLErrors as GraphQLError[];
@@ -140,8 +143,10 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
         });
         setBannerError(warningError);
       },
-    });
-  }, [runtimeOptions, setBannerError, showDevConsole, onError]);
+    };
+
+    return createUnifiedClient(unifiedOptions);
+  }, [runtimeOptions, aguiServerUrl, setBannerError, showDevConsole, onError]);
 
   return runtimeClient;
 };

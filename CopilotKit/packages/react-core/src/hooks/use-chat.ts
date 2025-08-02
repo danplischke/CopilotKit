@@ -482,7 +482,8 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
             if (ev.name === MetaEventName.CopilotKitLangGraphInterruptEvent) {
               const data = (ev as CopilotKitLangGraphInterruptEvent).data;
 
-              // @ts-expect-error -- same type of messages
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-ignore -- same type of messages
               rawMessagesResponse = [...rawMessagesResponse, ...data.messages];
               interruptMessages = convertGqlOutputToMessages(
                 // @ts-ignore
