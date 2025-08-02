@@ -227,8 +227,14 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
   const addErrorToast = useErrorToast();
   const { setBannerError } = useToast();
 
-  // Get onError from context since it's not part of copilotConfig
-  const { onError } = useCopilotContext();
+  const { 
+    onError, 
+    showDevConsole,
+    runtimeClient: contextRuntimeClient,
+    getAguiClientForAgent,
+    agentSession,
+    coAgentStateRenders
+  } = useCopilotContext();
 
   // Add tracing functionality to use-chat
   const traceUIError = async (error: CopilotKitError, originalError?: any) => {
@@ -277,16 +283,6 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
     ...(copilotConfig.headers || {}),
     ...(publicApiKey ? { [COPILOT_CLOUD_PUBLIC_API_KEY_HEADER]: publicApiKey } : {}),
   };
-
-  const { showDevConsole } = useCopilotContext();
-
-  const runtimeClient = useCopilotRuntimeClient({
-    url: copilotConfig.chatApiEndpoint,
-    publicApiKey: copilotConfig.publicApiKey,
-    headers,
-    credentials: copilotConfig.credentials,
-    showDevConsole,
-  });
 
   const pendingAppendsRef = useRef<{ message: Message; followUp: boolean }[]>([]);
 
@@ -361,8 +357,17 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
       const isAgentRun = agentSessionRef.current !== null;
 
+      // Use runtime client from context if available, otherwise fall back to ag_ui client
+      const runtimeClient = contextRuntimeClient;
+      
       if (!runtimeClient) {
-        throw new Error("Runtime client not available");
+        // For now, we'll throw an error if only ag_ui client is available
+        // Full ag_ui support in useChat will be implemented in a future update
+        const aguiClient = getAguiClientForAgent(agentSessionRef.current?.agentName);
+        if (aguiClient) {
+          throw new Error("Direct ag_ui client support in useChat is not yet implemented. Please use useCoagent for ag_ui servers or use the runtime server for chat functionality.");
+        }
+        throw new Error("No runtime client available");
       }
 
       const stream = runtimeClient.asStream(
