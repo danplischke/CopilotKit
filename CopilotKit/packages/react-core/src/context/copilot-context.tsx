@@ -25,7 +25,7 @@ import {
   LangGraphInterruptActionSetter,
 } from "../types/interrupt-action";
 import { SuggestionItem } from "../utils/suggestions";
-import { UnifiedClient } from "../lib/client-factory";
+import { ICopilotClient } from "../lib/ICopilotClient";
 
 /**
  * Interface for the configuration of the Copilot API.
@@ -201,7 +201,7 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: UnifiedClient;
+  runtimeClient: ICopilotClient;
 
   /**
    * The forwarded parameters to use for the task.

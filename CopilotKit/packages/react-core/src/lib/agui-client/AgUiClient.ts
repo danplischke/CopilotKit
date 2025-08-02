@@ -1,5 +1,6 @@
 import { GenerateCopilotResponseMutationVariables } from "@copilotkit/runtime-client-gql";
 import { CopilotKitError, CopilotKitErrorCode } from "@copilotkit/shared";
+import { ICopilotClient } from "../ICopilotClient";
 
 export interface AgUiClientOptions {
   url: string;
@@ -11,10 +12,10 @@ export interface AgUiClientOptions {
 }
 
 /**
- * Simple ag_ui client adapter that provides basic compatibility with CopilotRuntimeClient
+ * Simple ag_ui client adapter that implements ICopilotClient interface
  * This is a minimal implementation to demonstrate the pattern
  */
-export class AgUiClient {
+export class AgUiClient implements ICopilotClient {
   private url: string;
   private headers: Record<string, string>;
   private handleErrors?: (error: Error) => void;
@@ -80,8 +81,8 @@ export class AgUiClient {
    * Get available agents - simplified implementation that matches expected interface
    */
   availableAgents() {
-    // Return a promise that resolves to a structure matching urql OperationResult
-    return Promise.resolve({
+    // Return a simple object that can be used like a urql result
+    return {
       data: {
         availableAgents: {
           agents: [],
@@ -90,15 +91,15 @@ export class AgUiClient {
       error: undefined,
       extensions: {},
       stale: false,
-    });
+    };
   }
 
   /**
    * Load agent state - simplified implementation that matches expected interface
    */
   loadAgentState(data: { threadId: string; agentName: string }) {
-    // Return a promise that resolves to a structure matching urql OperationResult
-    return Promise.resolve({
+    // Return a simple object that can be used like a urql result
+    return {
       data: {
         loadAgentState: {
           state: null,
@@ -107,7 +108,7 @@ export class AgUiClient {
       error: undefined,
       extensions: {},
       stale: false,
-    });
+    };
   }
 
   /**

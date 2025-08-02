@@ -16,7 +16,8 @@ import {
   CopilotErrorEvent,
 } from "@copilotkit/shared";
 import { shouldShowDevConsole } from "../utils/dev-console";
-import { createUnifiedClient, UnifiedClient, UnifiedClientOptions } from "../lib/client-factory";
+import { createUnifiedClient, UnifiedClientOptions } from "../lib/client-factory";
+import { ICopilotClient } from "../lib/ICopilotClient";
 
 export interface CopilotRuntimeClientHookOptions extends CopilotRuntimeClientOptions {
   showDevConsole?: boolean;
@@ -24,7 +25,7 @@ export interface CopilotRuntimeClientHookOptions extends CopilotRuntimeClientOpt
   aguiServerUrl?: string;
 }
 
-export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions): UnifiedClient => {
+export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions): ICopilotClient => {
   const { setBannerError } = useToast();
   const { showDevConsole, onError, aguiServerUrl, ...runtimeOptions } = options;
 
