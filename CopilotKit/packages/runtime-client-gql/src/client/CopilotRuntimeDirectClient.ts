@@ -72,6 +72,12 @@ export class CopilotRuntimeDirectClient {
       const responseStream = new ReadableStream({
         start: async (controller) => {
           try {
+            // Handle abort signal
+            if (signal?.aborted) {
+              controller.close();
+              return;
+            }
+
             // Set up the AG_UI agent with messages
             this.httpAgent.messages = aguiMessages;
 
@@ -82,35 +88,69 @@ export class CopilotRuntimeDirectClient {
               parameters: JSON.parse(action.jsonSchema || '{}'),
             }));
 
+            // Prepare forwarded properties
+            const forwardedProps = {
+              ...properties,
+              threadMetadata: data.metadata,
+              agentSession: data.agentSession,
+              agentStates: data.agentStates,
+            };
+
             // Generate response from AG_UI agent
             const responseObservable = this.httpAgent.legacy_to_be_removed_runAgentBridged({
               tools,
-              forwardedProps: {
-                ...properties,
-                threadMetadata: data.metadata,
-              },
+              forwardedProps,
             });
+
+            // Set up abort handling
+            const abortHandler = () => {
+              controller.close();
+            };
+            signal?.addEventListener('abort', abortHandler);
 
             // Convert AG_UI events back to GQL format and stream them
             responseObservable.subscribe({
               next: (event) => {
-                const gqlEvent = this.convertAGUIEventToGQL(event);
-                if (gqlEvent) {
-                  controller.enqueue(gqlEvent);
+                try {
+                  // Skip if already aborted
+                  if (signal?.aborted) return;
+
+                  const gqlEvent = this.convertAGUIEventToGQL(event);
+                  if (gqlEvent) {
+                    controller.enqueue(gqlEvent);
+                  }
+                } catch (error) {
+                  this.handleErrors?.(error as Error);
+                  if (!signal?.aborted) {
+                    controller.error(error);
+                  }
                 }
               },
               error: (error) => {
+                // Clean up abort listener
+                signal?.removeEventListener('abort', abortHandler);
+                
+                if (signal?.aborted) {
+                  // If aborted, just close silently
+                  controller.close();
+                  return;
+                }
+
                 this.handleErrors?.(error);
                 controller.error(error);
               },
               complete: () => {
+                // Clean up abort listener
+                signal?.removeEventListener('abort', abortHandler);
                 controller.close();
               }
             });
 
           } catch (error) {
             this.handleErrors?.(error as Error);
-            controller.error(error);
+            if (!signal?.aborted) {
+              controller.error(error);
+            }
           }
         }
       });
@@ -118,6 +158,11 @@ export class CopilotRuntimeDirectClient {
       // Return an observable-like interface compatible with the GraphQL client
       return {
         subscribe: (observer: any) => {
+          if (signal?.aborted) {
+            observer.complete?.();
+            return () => {};
+          }
+
           const reader = responseStream.getReader();
           
           const pump = async () => {
@@ -128,7 +173,14 @@ export class CopilotRuntimeDirectClient {
                   observer.complete?.();
                   break;
                 }
-                observer.next?.({ data: value, hasNext: true });
+                
+                // Check for abort before processing
+                if (signal?.aborted) {
+                  observer.complete?.();
+                  break;
+                }
+
+                observer.next?.({ data: value, hasNext: !done });
               }
             } catch (error) {
               if (signal?.aborted) {
@@ -153,7 +205,13 @@ export class CopilotRuntimeDirectClient {
       // Return a failed observable
       return {
         subscribe: (observer: any) => {
-          setTimeout(() => observer.error?.(error), 0);
+          setTimeout(() => {
+            if (!signal?.aborted) {
+              observer.error?.(error);
+            } else {
+              observer.complete?.();
+            }
+          }, 0);
           return () => {};
         }
       };
@@ -222,65 +280,108 @@ export class CopilotRuntimeDirectClient {
    * Convert AG_UI events to GraphQL-compatible format
    */
   private convertAGUIEventToGQL(event: any): any {
-    // This is a simplified conversion - would need to be expanded based on specific AG_UI event types
+    // Handle AG_UI runtime events and convert them to GraphQL format
     
-    if (event.type === "text_message_start") {
-      return {
-        __typename: "TextMessageOutput",
-        id: event.messageId || randomId(),
-        createdAt: new Date().toISOString(),
-        role: "assistant",
-        content: "",
-        status: { code: "PENDING" }
-      };
+    switch (event.type) {
+      case "text_message_start":
+        return {
+          __typename: "TextMessageOutput",
+          id: event.messageId || randomId(),
+          createdAt: new Date().toISOString(),
+          role: "assistant",
+          content: "",
+          status: { code: "PENDING" }
+        };
+
+      case "text_message_content":
+        return {
+          __typename: "TextMessageOutput", 
+          id: event.messageId,
+          content: event.content,
+          role: "assistant",
+        };
+
+      case "text_message_end":
+        return {
+          __typename: "TextMessageOutput",
+          id: event.messageId,
+          status: { code: "SUCCESS" }
+        };
+
+      case "action_execution_start":
+        return {
+          __typename: "ActionExecutionMessageOutput",
+          id: event.actionExecutionId,
+          name: event.actionName,
+          arguments: [],
+          parentMessageId: event.parentMessageId,
+          status: { code: "PENDING" }
+        };
+
+      case "action_execution_args":
+        return {
+          __typename: "ActionExecutionMessageOutput",
+          id: event.actionExecutionId,
+          arguments: [event.args],
+        };
+
+      case "action_execution_end":
+        return {
+          __typename: "ActionExecutionMessageOutput",
+          id: event.actionExecutionId,
+          status: { code: "SUCCESS" }
+        };
+
+      case "agent_state_message":
+        return {
+          __typename: "AgentStateMessageOutput",
+          id: randomId(),
+          threadId: event.threadId,
+          agentName: event.agentName,
+          state: event.state,
+          running: event.running || false,
+          role: "assistant",
+          nodeName: event.nodeName,
+          runId: event.runId,
+          active: event.active || false,
+          createdAt: new Date().toISOString(),
+          status: { code: "SUCCESS" }
+        };
+
+      case "meta_event":
+        if (event.name === "langgraph_interrupt") {
+          return {
+            __typename: "LangGraphInterruptEvent",
+            type: "MetaEvent",
+            name: "LANG_GRAPH_INTERRUPT_EVENT",
+            value: event.value
+          };
+        }
+        break;
+
+      case "error":
+        // Handle AG_UI errors appropriately
+        throw new CopilotKitLowLevelError({
+          error: new Error(event.message || "AG_UI Error"),
+          url: this.httpAgent.url || "ag_ui_agent",
+          message: event.message || "Unknown AG_UI error occurred"
+        });
+
+      default:
+        // For unhandled event types, try to preserve the original structure
+        // while ensuring compatibility with GraphQL expectations
+        return {
+          __typename: "TextMessageOutput",
+          id: event.id || randomId(),
+          createdAt: new Date().toISOString(),
+          content: event.content || "",
+          role: "assistant",
+          status: { code: "SUCCESS" },
+          ...event // Spread original event data
+        };
     }
 
-    if (event.type === "text_message_content") {
-      return {
-        __typename: "TextMessageOutput", 
-        id: event.messageId,
-        content: event.content,
-        role: "assistant",
-      };
-    }
-
-    if (event.type === "text_message_end") {
-      return {
-        __typename: "TextMessageOutput",
-        id: event.messageId,
-        status: { code: "SUCCESS" }
-      };
-    }
-
-    if (event.type === "action_execution_start") {
-      return {
-        __typename: "ActionExecutionMessageOutput",
-        id: event.actionExecutionId,
-        name: event.actionName,
-        arguments: [],
-        parentMessageId: event.parentMessageId,
-        status: { code: "PENDING" }
-      };
-    }
-
-    if (event.type === "action_execution_args") {
-      return {
-        __typename: "ActionExecutionMessageOutput",
-        id: event.actionExecutionId,
-        arguments: [event.args],
-      };
-    }
-
-    if (event.type === "action_execution_end") {
-      return {
-        __typename: "ActionExecutionMessageOutput",
-        id: event.actionExecutionId,
-        status: { code: "SUCCESS" }
-      };
-    }
-
-    // Default: return the event as-is for unhandled types
-    return event;
+    return null;
   }
 
   /**
