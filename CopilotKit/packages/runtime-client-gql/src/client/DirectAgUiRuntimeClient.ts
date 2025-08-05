@@ -14,6 +14,7 @@ import {
   CopilotKitVersionMismatchError,
   getPossibleVersionMismatch,
 } from "@copilotkit/shared";
+import { ICopilotRuntimeClient } from "./interfaces";
 
 export interface DirectAgUiConfig {
   endpoint: string;
@@ -43,13 +44,16 @@ export interface DirectAgUiRuntimeClientOptions {
  * Direct AgUI Runtime Client that communicates directly with an ag_ui server
  * without going through the GraphQL proxy layer.
  */
-export class DirectAgUiRuntimeClient {
+export class DirectAgUiRuntimeClient implements ICopilotRuntimeClient {
   private baseUrl: string;
   private headers: Record<string, string>;
   private credentials?: RequestCredentials;
   public handleGQLErrors?: (error: Error) => void;
   public handleGQLWarning?: (warning: string) => void;
   private directConfig?: DirectAgUiConfig;
+  
+  // Add client property for compatibility with CopilotRuntimeClient interface
+  public client: any;
 
   constructor(options: DirectAgUiRuntimeClientOptions) {
     this.baseUrl = options.url;
@@ -68,6 +72,12 @@ export class DirectAgUiRuntimeClient {
     if (options.publicApiKey) {
       this.headers["x-copilotcloud-public-api-key"] = options.publicApiKey;
     }
+
+    // Create a mock client property for compatibility
+    this.client = {
+      url: this.baseUrl,
+      // Add other properties as needed for compatibility
+    };
   }
 
   /**
@@ -290,12 +300,20 @@ export class DirectAgUiRuntimeClient {
       }
       
       const result = await response.json();
-      return { data: result };
+      return { data: result, error: null };
+    }).catch((error) => {
+      if (this.handleGQLErrors) {
+        this.handleGQLErrors(error);
+      }
+      return { data: null, error };
     });
 
     // Return a promise-like interface that mimics URQL
     return {
       toPromise: () => responsePromise,
+      // Add compatibility properties
+      data: undefined,
+      error: null,
     };
   }
 
@@ -314,16 +332,19 @@ export class DirectAgUiRuntimeClient {
       }
       
       const result = await response.json();
-      return { data: result };
+      return { data: result, error: null };
     }).catch((error) => {
       if (this.handleGQLErrors) {
         this.handleGQLErrors(error);
       }
-      throw error;
+      return { data: null, error };
     });
 
     return {
       toPromise: () => responsePromise,
+      // Add compatibility properties
+      data: undefined,
+      error: null,
     };
   }
 

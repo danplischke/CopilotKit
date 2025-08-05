@@ -1,12 +1,6 @@
 import {
-  CopilotRuntimeClient,
-  CopilotRuntimeClientOptions,
   DirectAgUiRuntimeClient,
   DirectAgUiRuntimeClientOptions,
-  createCopilotRuntimeClient,
-  CopilotRuntimeClientMode,
-  ICopilotRuntimeClient,
-  GraphQLError,
 } from "@copilotkit/runtime-client-gql";
 import { useToast } from "../components/toast/toast-provider";
 import { useMemo, useRef } from "react";
@@ -22,17 +16,18 @@ import {
 } from "@copilotkit/shared";
 import { shouldShowDevConsole } from "../utils/dev-console";
 
-export interface CopilotRuntimeClientHookOptions extends CopilotRuntimeClientOptions {
+export interface DirectAgUiClientHookOptions extends DirectAgUiRuntimeClientOptions {
   showDevConsole?: boolean;
   onError?: CopilotErrorHandler;
-  // New options for direct client support
-  mode?: CopilotRuntimeClientMode;
-  directConfig?: Omit<DirectAgUiRuntimeClientOptions, keyof CopilotRuntimeClientOptions>;
 }
 
-export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions): ICopilotRuntimeClient => {
+/**
+ * Hook for creating a DirectAgUiRuntimeClient that communicates directly with ag_ui servers
+ * bypassing the GraphQL proxy layer.
+ */
+export const useDirectAgUiRuntimeClient = (options: DirectAgUiClientHookOptions): DirectAgUiRuntimeClient => {
   const { setBannerError } = useToast();
-  const { showDevConsole, onError, mode = 'graphql', directConfig, ...runtimeOptions } = options;
+  const { showDevConsole, onError, ...runtimeOptions } = options;
 
   // Deduplication state for structured errors
   const lastStructuredErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
@@ -49,7 +44,7 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
         context: {
           source: "ui",
           request: {
-            operation: "runtimeClient",
+            operation: "directAgUiClient",
             url: runtimeOptions.url,
             startTime: Date.now(),
           },
@@ -68,13 +63,13 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
   };
 
   const runtimeClient = useMemo(() => {
-    // Create error handlers that will be shared between client types
     const handleGQLErrors = (error: Error) => {
+      // Handle both GraphQL-style errors and direct errors
       if ((error as any).graphQLErrors?.length) {
-        const graphQLErrors = (error as any).graphQLErrors as GraphQLError[];
+        const graphQLErrors = (error as any).graphQLErrors;
 
         // Route all errors to banners for consistent UI
-        const routeError = (gqlError: GraphQLError) => {
+        const routeError = (gqlError: any) => {
           const extensions = gqlError.extensions;
           const visibility = extensions?.visibility as ErrorVisibility;
           const isDev = shouldShowDevConsole(showDevConsole ?? false);
@@ -127,13 +122,13 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
         if (!isDev) {
           console.error("CopilotKit Error (hidden in production):", error);
         } else {
-          // Route non-GraphQL errors to banner as well
+          // Route direct errors to banner as well
           const fallbackError = new CopilotKitError({
             message: error?.message || String(error),
             code: CopilotKitErrorCode.UNKNOWN,
           });
           setBannerError(fallbackError);
-          // Trace the non-GraphQL error
+          // Trace the direct error
           traceUIError(fallbackError, error);
         }
       }
@@ -149,30 +144,18 @@ export const useCopilotRuntimeClient = (options: CopilotRuntimeClientHookOptions
       setBannerError(warningError);
     };
 
-    // Create client based on mode
-    if (mode === 'direct') {
-      const directOptions: DirectAgUiRuntimeClientOptions = {
-        ...runtimeOptions,
-        ...directConfig,
-        handleGQLErrors,
-        handleGQLWarning,
-      };
-      return new DirectAgUiRuntimeClient(directOptions);
-    } else {
-      // Default to GraphQL mode for backward compatibility
-      return new CopilotRuntimeClient({
-        ...runtimeOptions,
-        handleGQLErrors,
-        handleGQLWarning,
-      });
-    }
-  }, [runtimeOptions, directConfig, mode, setBannerError, showDevConsole, onError]);
+    return new DirectAgUiRuntimeClient({
+      ...runtimeOptions,
+      handleGQLErrors,
+      handleGQLWarning,
+    });
+  }, [runtimeOptions, setBannerError, showDevConsole, onError]);
 
   return runtimeClient;
 };
 
 // Create appropriate structured error from GraphQL error
-function createStructuredError(gqlError: GraphQLError): CopilotKitError | null {
+function createStructuredError(gqlError: any): CopilotKitError | null {
   const extensions = gqlError.extensions;
   const originalError = extensions?.originalError as any;
   const message = originalError?.message || gqlError.message;

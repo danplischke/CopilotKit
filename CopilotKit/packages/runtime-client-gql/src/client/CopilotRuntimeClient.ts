@@ -16,6 +16,7 @@ import {
   CopilotKitVersionMismatchError,
   getPossibleVersionMismatch,
 } from "@copilotkit/shared";
+import { ICopilotRuntimeClient } from "./interfaces";
 
 const createFetchFn =
   (signal?: AbortSignal, handleGQLWarning?: (warning: string) => void) =>
@@ -71,7 +72,7 @@ export interface CopilotRuntimeClientOptions {
   handleGQLWarning?: (warning: string) => void;
 }
 
-export class CopilotRuntimeClient {
+export class CopilotRuntimeClient implements ICopilotRuntimeClient {
   client: Client;
   public handleGQLErrors?: (error: Error) => void;
   public handleGQLWarning?: (warning: string) => void;

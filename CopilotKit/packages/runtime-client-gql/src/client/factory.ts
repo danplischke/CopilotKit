@@ -1,5 +1,6 @@
 import { CopilotRuntimeClient, CopilotRuntimeClientOptions } from "./CopilotRuntimeClient";
 import { DirectAgUiRuntimeClient, DirectAgUiRuntimeClientOptions, DirectAgUiConfig } from "./DirectAgUiRuntimeClient";
+import { ICopilotRuntimeClient } from "./interfaces";
 
 export type CopilotRuntimeClientMode = 'graphql' | 'direct';
 
@@ -12,7 +13,7 @@ export interface CopilotRuntimeClientFactoryOptions {
 /**
  * Factory function to create either a GraphQL-based or Direct AgUI runtime client
  */
-export function createCopilotRuntimeClient(options: CopilotRuntimeClientFactoryOptions): CopilotRuntimeClient | DirectAgUiRuntimeClient {
+export function createCopilotRuntimeClient(options: CopilotRuntimeClientFactoryOptions): ICopilotRuntimeClient {
   if (options.mode === 'direct') {
     if (!options.directConfig) {
       throw new Error('directConfig is required when mode is "direct"');
