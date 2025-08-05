@@ -1,4 +1,6 @@
 export * from "./CopilotRuntimeClient";
+export * from "./DirectAgUiRuntimeClient";
+export * from "./factory";
 export {
   convertMessagesToGqlInput,
   convertGqlOutputToMessages,
