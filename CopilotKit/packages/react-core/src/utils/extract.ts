@@ -1,26 +1,22 @@
 import {
   Action,
-  COPILOT_CLOUD_PUBLIC_API_KEY_HEADER,
+  actionParametersToJsonSchema,
   MappedParameterTypes,
   Parameter,
-  actionParametersToJsonSchema,
 } from "@copilotkit/shared";
 import {
   ActionExecutionMessage,
+  convertGqlOutputToMessages,
+  convertMessagesToGqlInput,
+  CopilotRequestType,
+  filterAgentStateMessages,
+  ForwardedParametersInput,
   Message,
   Role,
   TextMessage,
-  convertGqlOutputToMessages,
-  CopilotRequestType,
-  ForwardedParametersInput,
 } from "@copilotkit/runtime-client-gql";
 import { CopilotContextParams, CopilotMessagesContextParams } from "../context";
 import { defaultCopilotContextCategories } from "../components";
-import { CopilotRuntimeClient } from "@copilotkit/runtime-client-gql";
-import {
-  convertMessagesToGqlInput,
-  filterAgentStateMessages,
-} from "@copilotkit/runtime-client-gql";
 
 interface InitialState<T extends Parameter[] | [] = []> {
   status: "initial";
@@ -101,6 +97,12 @@ export async function extract<const T extends Parameter[]>({
     content: makeInstructionsMessage(instructions),
     role: Role.User,
   });
+
+  if (!context.runtimeClient) {
+    throw new Error(
+      "Runtime client not available. Please ensure CopilotKit is configured with runtimeUrl.",
+    );
+  }
 
   const response = context.runtimeClient.asStream(
     context.runtimeClient.generateCopilotResponse({

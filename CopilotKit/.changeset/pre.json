@@ -4,6 +4,7 @@
   "initialVersions": {
     "next-openai": "1.4.6",
     "next-pages-router": "1.4.6",
+    "ag_ui": "1.4.6",
     "node-express": "1.4.6",
     "node-http": "1.4.6",
     "@copilotkit/react-core": "1.9.3",

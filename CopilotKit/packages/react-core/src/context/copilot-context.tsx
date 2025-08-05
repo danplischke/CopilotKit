@@ -1,31 +1,19 @@
-import {
-  CopilotCloudConfig,
-  FunctionCallHandler,
-  CopilotErrorHandler,
-  CopilotKitError,
-} from "@copilotkit/shared";
-import {
-  ActionRenderProps,
-  CatchAllActionRenderProps,
-  FrontendAction,
-} from "../types/frontend-action";
+import { CopilotCloudConfig, CopilotErrorHandler, CopilotKitError, FunctionCallHandler } from "@copilotkit/shared";
+import { ActionRenderProps, CatchAllActionRenderProps, FrontendAction } from "../types/frontend-action";
 import React from "react";
-import { TreeNodeId, Tree } from "../hooks/use-tree";
+import { Tree, TreeNodeId } from "../hooks/use-tree";
 import { DocumentPointer } from "../types";
 import { CopilotChatSuggestionConfiguration } from "../types/chat-suggestion-configuration";
 import { CoAgentStateRender, CoAgentStateRenderProps } from "../types/coagent-action";
 import { CoagentState } from "../types/coagent-state";
 import {
+  Agent,
   CopilotRuntimeClient,
   ExtensionsInput,
   ForwardedParametersInput,
 } from "@copilotkit/runtime-client-gql";
-import { Agent } from "@copilotkit/runtime-client-gql";
-import {
-  LangGraphInterruptAction,
-  LangGraphInterruptActionSetter,
-} from "../types/interrupt-action";
-import { SuggestionItem } from "../utils/suggestions";
+import { LangGraphInterruptAction, LangGraphInterruptActionSetter } from "../types/interrupt-action";
+import { AbstractAgent } from "@ag-ui/client";
 
 /**
  * Interface for the configuration of the Copilot API.
@@ -196,7 +184,13 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: CopilotRuntimeClient;
+  runtimeClient: CopilotRuntimeClient | null;
+
+  // ag_ui clients
+  aguiClients: Record<string, AbstractAgent> | null;
+
+  // helper function to get the appropriate ag_ui client for an agent
+  getAguiClientForAgent: (agentName?: string) => AbstractAgent | null;
 
   /**
    * The forwarded parameters to use for the task.
@@ -265,7 +259,9 @@ const emptyCopilotContext: CopilotContextParams = {
   getDocumentsContext: (categories: string[]) => returnAndThrowInDebug([]),
   addDocumentContext: () => returnAndThrowInDebug(""),
   removeDocumentContext: () => {},
-  runtimeClient: {} as any,
+  runtimeClient: null,
+  aguiClients: null,
+  getAguiClientForAgent: () => null,
 
   copilotApiConfig: new (class implements CopilotApiConfig {
     get chatApiEndpoint(): string {
@@ -275,6 +271,7 @@ const emptyCopilotContext: CopilotContextParams = {
     get headers(): Record<string, string> {
       return {};
     }
+
     get body(): Record<string, any> {
       return {};
     }

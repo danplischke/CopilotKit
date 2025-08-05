@@ -89,19 +89,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  CopilotContextParams,
-  CopilotMessagesContextParams,
-  useCopilotContext,
-  useCopilotMessagesContext,
-} from "../context";
+import { CopilotContextParams, useCopilotContext } from "../context";
 import { CoagentState } from "../types/coagent-state";
 import { useCopilotChat } from "./use-copilot-chat_internal";
-import { Message } from "@copilotkit/shared";
+import { CopilotKitAgentDiscoveryError, Message, parseJson } from "@copilotkit/shared";
 import { useAsyncCallback } from "../components/error-boundary/error-utils";
 import { useToast } from "../components/toast/toast-provider";
 import { useCopilotRuntimeClient } from "./use-copilot-runtime-client";
-import { parseJson, CopilotKitAgentDiscoveryError } from "@copilotkit/shared";
 import { useMessagesTap } from "../components/copilot-provider/copilot-messages";
 import { Message as GqlMessage } from "@copilotkit/runtime-client-gql";
 
@@ -274,6 +268,11 @@ export function useCoAgent<T = any>(options: UseCoagentOptions<T>): UseCoagentRe
   useEffect(() => {
     const fetchAgentState = async () => {
       if (!threadId || threadId === lastLoadedThreadId.current) return;
+
+      if (!runtimeClient) {
+        console.warn("Runtime client not available, skipping agent state fetch");
+        return;
+      }
 
       const result = await runtimeClient.loadAgentState({
         threadId,

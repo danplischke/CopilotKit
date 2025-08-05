@@ -1,45 +1,44 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import {
-  FunctionCallHandler,
-  COPILOT_CLOUD_PUBLIC_API_KEY_HEADER,
   CoAgentStateRenderHandler,
-  randomId,
-  parseJson,
+  COPILOT_CLOUD_PUBLIC_API_KEY_HEADER,
   CopilotKitError,
   CopilotKitErrorCode,
+  FunctionCallHandler,
+  parseJson,
+  randomId,
 } from "@copilotkit/shared";
 import {
-  Message,
-  TextMessage,
-  ResultMessage,
+  ActionExecutionMessage,
+  AgentStateInput,
+  convertGqlOutputToMessages,
   convertMessagesToGqlInput,
+  CopilotKitLangGraphInterruptEvent,
+  CopilotRequestType,
+  CopilotRuntimeClient,
+  ExtensionsInput,
   filterAdjacentAgentStateMessages,
   filterAgentStateMessages,
-  convertGqlOutputToMessages,
-  MessageStatusCode,
-  MessageRole,
-  Role,
-  CopilotRequestType,
   ForwardedParametersInput,
-  loadMessagesFromJsonRepresentation,
-  ExtensionsInput,
-  CopilotRuntimeClient,
   langGraphInterruptEvent,
-  MetaEvent,
-  MetaEventName,
-  ActionExecutionMessage,
-  CopilotKitLangGraphInterruptEvent,
   LangGraphInterruptEvent,
+  loadMessagesFromJsonRepresentation,
+  Message,
+  MessageRole,
+  MessageStatusCode,
+  MetaEvent,
   MetaEventInput,
-  AgentStateInput,
+  MetaEventName,
+  ResultMessage,
+  Role,
+  TextMessage,
 } from "@copilotkit/runtime-client-gql";
 
 import { CopilotApiConfig } from "../context";
 import { FrontendAction, processActionsForRuntimeRequest } from "../types/frontend-action";
 import { CoagentState } from "../types/coagent-state";
 import { AgentSession, useCopilotContext } from "../context/copilot-context";
-import { useCopilotRuntimeClient } from "./use-copilot-runtime-client";
 import { useAsyncCallback, useErrorToast } from "../components/error-boundary/error-utils";
 import { useToast } from "../components/toast/toast-provider";
 import {
@@ -227,8 +226,13 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
   const addErrorToast = useErrorToast();
   const { setBannerError } = useToast();
 
-  // Get onError from context since it's not part of copilotConfig
-  const { onError } = useCopilotContext();
+  const {
+    onError,
+    showDevConsole,
+    runtimeClient: contextRuntimeClient,
+    getAguiClientForAgent,
+    coAgentStateRenders,
+  } = useCopilotContext();
 
   // Add tracing functionality to use-chat
   const traceUIError = async (error: CopilotKitError, originalError?: any) => {
@@ -278,15 +282,44 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
     ...(publicApiKey ? { [COPILOT_CLOUD_PUBLIC_API_KEY_HEADER]: publicApiKey } : {}),
   };
 
-  const { showDevConsole } = useCopilotContext();
+  // Use runtime client from context if available, otherwise fall back to ag_ui client
+  let runtimeClient = contextRuntimeClient;
 
-  const runtimeClient = useCopilotRuntimeClient({
-    url: copilotConfig.chatApiEndpoint,
-    publicApiKey: copilotConfig.publicApiKey,
-    headers,
-    credentials: copilotConfig.credentials,
-    showDevConsole,
+  if (!runtimeClient) {
+    try {
+      const aguiClient = getAguiClientForAgent(agentSessionRef.current?.agentName);
+      console.log("AGUI client lookup result:", {
+        agentName: agentSessionRef.current?.agentName,
+        aguiClient: !!aguiClient,
+        clientType: aguiClient?.constructor?.name
+      });
+      if (aguiClient) {
+        runtimeClient = aguiClient as any; // Type assertion needed since AbstractAgent and CopilotRuntimeClient may have different interfaces
+      }
+    } catch (error) {
+      // If getAguiClientForAgent throws an error (e.g., "ag_ui is not configured!"),
+      // we'll handle it gracefully and show a more helpful error message below
+      console.log("Failed to get AGUI client:", error);
+      console.warn("Failed to get AGUI client:", error);
+    }
+  }
+
+  console.log("Runtime client status:", {
+    contextRuntimeClient: !!contextRuntimeClient,
+    finalRuntimeClient: !!runtimeClient,
+    runtimeClientType: runtimeClient?.constructor?.name
   });
+
+  // If no runtime client is available at all, throw a more helpful error
+  if (!runtimeClient) {
+    throw new Error(
+      "No runtime client available. Please ensure CopilotKit is properly configured with either:\n" +
+      "1. A runtime URL (runtimeUrl prop)\n" +
+      "2. AGUI endpoints (aguiEndpoints prop) with a running agent server at http://localhost:8000/agents/orchestration\n" +
+      "3. Or configure a custom runtime client\n\n" +
+      "For the ag_ui example, make sure you have an agent server running. Check the console for more details."
+    );
+  }
 
   const pendingAppendsRef = useRef<{ message: Message; followUp: boolean }[]>([]);
 
@@ -1011,112 +1044,4 @@ function constructFinalMessages(
   const finalMessages =
     syncedMessages.length > 0 ? [...syncedMessages] : [...previousMessages, ...newMessages];
 
-  if (syncedMessages.length > 0) {
-    const messagesWithAgentState = [...previousMessages, ...newMessages];
-
-    let previousMessageId: string | undefined = undefined;
-
-    for (const message of messagesWithAgentState) {
-      if (message.isAgentStateMessage()) {
-        // insert this message into finalMessages after the position of previousMessageId
-        const index = finalMessages.findIndex((msg) => msg.id === previousMessageId);
-        if (index !== -1) {
-          finalMessages.splice(index + 1, 0, message);
-        }
-      }
-
-      previousMessageId = message.id;
-    }
-  }
-
-  return finalMessages;
-}
-
-async function executeAction({
-  onFunctionCall,
-  message,
-  chatAbortControllerRef,
-  onError,
-  setMessages,
-  getFinalMessages,
-  isRenderAndWait,
-}: {
-  onFunctionCall: FunctionCallHandler;
-  message: ActionExecutionMessage;
-  chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
-  onError: (error: Error) => void;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  getFinalMessages: () => Message[];
-  isRenderAndWait: boolean;
-}) {
-  let result: any;
-  let error: Error | null = null;
-
-  const currentMessagesForHandler = getFinalMessages();
-
-  // The handler (onFunctionCall) runs its synchronous part here, potentially setting up
-  // renderAndWaitRef.current for HITL actions via useCopilotAction's transformed handler.
-  const handlerReturnedPromise = onFunctionCall({
-    messages: currentMessagesForHandler,
-    name: message.name,
-    args: message.arguments,
-  });
-
-  // For HITL actions, call flushSync immediately after their handler has set up the promise
-  // and before awaiting the promise. This ensures the UI updates to an interactive state.
-  if (isRenderAndWait) {
-    const currentMessagesForRender = getFinalMessages();
-    flushSync(() => {
-      setMessages([...currentMessagesForRender]);
-    });
-  }
-
-  try {
-    result = await Promise.race([
-      handlerReturnedPromise, // Await the promise returned by the handler
-      new Promise((resolve) =>
-        chatAbortControllerRef.current?.signal.addEventListener("abort", () =>
-          resolve("Operation was aborted by the user"),
-        ),
-      ),
-      // if the user stopped generation, we also abort consecutive actions
-      new Promise((resolve) => {
-        if (chatAbortControllerRef.current?.signal.aborted) {
-          resolve("Operation was aborted by the user");
-        }
-      }),
-    ]);
-  } catch (e) {
-    onError(e as Error);
-  }
-  return new ResultMessage({
-    id: "result-" + message.id,
-    result: ResultMessage.encodeResult(
-      error
-        ? {
-            content: result,
-            error: JSON.parse(JSON.stringify(error, Object.getOwnPropertyNames(error))),
-          }
-        : result,
-    ),
-    actionExecutionId: message.id,
-    actionName: message.name,
-  });
-}
-
-function getPairedFeAction(
-  actions: FrontendAction<any>[],
-  message: ActionExecutionMessage | ResultMessage,
-) {
-  let actionName = null;
-  if (message.isActionExecutionMessage()) {
-    actionName = message.name;
-  } else if (message.isResultMessage()) {
-    actionName = message.actionName;
-  }
-  return actions.find(
-    (action) =>
-      (action.name === actionName && action.available === "frontend") ||
-      action.pairedAction === actionName,
-  );
-}
+  if

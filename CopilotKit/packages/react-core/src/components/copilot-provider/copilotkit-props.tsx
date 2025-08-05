@@ -2,6 +2,8 @@ import { ForwardedParametersInput } from "@copilotkit/runtime-client-gql";
 import { ReactNode } from "react";
 import { AuthState } from "../../context/copilot-context";
 import { CopilotErrorHandler } from "@copilotkit/shared";
+import { AbstractAgent } from "@ag-ui/client";
+
 /**
  * Props for CopilotKit.
  */
@@ -36,6 +38,13 @@ export interface CopilotKitProps {
    * The endpoint for the Copilot Runtime instance. [Click here for more information](/concepts/copilot-runtime).
    */
   runtimeUrl?: string;
+
+  /**
+   * Multiple ag_ui server endpoints mapped by agent name. When provided, CopilotKit will
+   * connect directly to the appropriate ag_ui server based on the agent being used.
+   * This is mutually exclusive with runtimeUrl.
+   */
+  aguiEndpoints?: Record<string, string>;
 
   /**
    * The endpoint for the Copilot transcribe audio service.
