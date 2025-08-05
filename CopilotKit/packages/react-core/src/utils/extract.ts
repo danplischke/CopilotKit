@@ -142,7 +142,9 @@ export async function extract<const T extends Parameter[]>({
   let actionExecutionMessage: ActionExecutionMessage | undefined = undefined;
 
   while (true) {
-    const { done, value } = await reader.read();
+    const readResult = await reader.read();
+    const { done } = readResult;
+    const value = readResult.value as any;
 
     if (done) {
       break;

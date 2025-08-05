@@ -432,7 +432,7 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
       try {
         while (true) {
-          let done, value;
+          let done, value: any;
 
           try {
             const readResult = await reader.read();
@@ -482,7 +482,7 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
             if (ev.name === MetaEventName.CopilotKitLangGraphInterruptEvent) {
               const data = (ev as CopilotKitLangGraphInterruptEvent).data;
 
-              // @ts-expect-error -- same type of messages
+              // same type of messages
               rawMessagesResponse = [...rawMessagesResponse, ...data.messages];
               interruptMessages = convertGqlOutputToMessages(
                 // @ts-ignore
