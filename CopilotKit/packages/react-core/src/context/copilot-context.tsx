@@ -16,7 +16,7 @@ import { CopilotChatSuggestionConfiguration } from "../types/chat-suggestion-con
 import { CoAgentStateRender, CoAgentStateRenderProps } from "../types/coagent-action";
 import { CoagentState } from "../types/coagent-state";
 import {
-  CopilotRuntimeClient,
+  ICopilotRuntimeClient,
   ExtensionsInput,
   ForwardedParametersInput,
 } from "@copilotkit/runtime-client-gql";
@@ -196,7 +196,7 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: CopilotRuntimeClient;
+  runtimeClient: ICopilotRuntimeClient;
 
   /**
    * The forwarded parameters to use for the task.
