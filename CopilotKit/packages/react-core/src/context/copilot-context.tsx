@@ -25,7 +25,7 @@ import {
   LangGraphInterruptAction,
   LangGraphInterruptActionSetter,
 } from "../types/interrupt-action";
-import { SuggestionItem } from "../utils/suggestions";
+import { HttpAgent as AguiClient } from "@ag-ui/client";
 
 /**
  * Interface for the configuration of the Copilot API.
@@ -196,7 +196,16 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: CopilotRuntimeClient;
+  runtimeClient: CopilotRuntimeClient | null;
+  
+  // ag_ui client (alternative to runtime client)
+  aguiClient: AguiClient | null;
+  
+  // multiple ag_ui clients (alternative to single aguiClient)
+  aguiClients: Record<string, AguiClient> | null;
+  
+  // helper function to get the appropriate ag_ui client for an agent
+  getAguiClientForAgent: (agentName?: string) => AguiClient | null;
 
   /**
    * The forwarded parameters to use for the task.
@@ -265,7 +274,10 @@ const emptyCopilotContext: CopilotContextParams = {
   getDocumentsContext: (categories: string[]) => returnAndThrowInDebug([]),
   addDocumentContext: () => returnAndThrowInDebug(""),
   removeDocumentContext: () => {},
-  runtimeClient: {} as any,
+  runtimeClient: null,
+  aguiClient: null,
+  aguiClients: null,
+  getAguiClientForAgent: () => null,
 
   copilotApiConfig: new (class implements CopilotApiConfig {
     get chatApiEndpoint(): string {

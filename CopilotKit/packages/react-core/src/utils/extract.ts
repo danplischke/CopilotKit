@@ -102,6 +102,10 @@ export async function extract<const T extends Parameter[]>({
     role: Role.User,
   });
 
+  if (!context.runtimeClient) {
+    throw new Error("Runtime client not available. Please ensure CopilotKit is configured with runtimeUrl.");
+  }
+
   const response = context.runtimeClient.asStream(
     context.runtimeClient.generateCopilotResponse({
       data: {
