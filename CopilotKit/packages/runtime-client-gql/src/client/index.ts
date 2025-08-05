@@ -8,3 +8,4 @@ export {
 } from "./conversion";
 export * from "./types";
 export type { GraphQLError } from "graphql";
+export { CopilotRuntimeDirectClient } from "./CopilotRuntimeDirectClient";
