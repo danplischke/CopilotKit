@@ -2,6 +2,7 @@ import { ForwardedParametersInput } from "@copilotkit/runtime-client-gql";
 import { ReactNode } from "react";
 import { AuthState } from "../../context/copilot-context";
 import { CopilotErrorHandler } from "@copilotkit/shared";
+import { AguiAgentConfig } from "@copilotkit/runtime-client-agui";
 /**
  * Props for CopilotKit.
  */
@@ -34,8 +35,36 @@ export interface CopilotKitProps {
 
   /**
    * The endpoint for the Copilot Runtime instance. [Click here for more information](/concepts/copilot-runtime).
+   * 
+   * @deprecated Use `aguiAgents` for direct ag_ui server connections or `runtimeUrl` for GraphQL proxy connections
    */
   runtimeUrl?: string;
+
+  /**
+   * Configuration for direct ag_ui server connections.
+   * This allows you to connect directly to ag_ui servers without requiring a GraphQL proxy.
+   * 
+   * @example
+   * ```tsx
+   * <CopilotKit
+   *   aguiAgents={[
+   *     {
+   *       name: 'support',
+   *       url: 'http://localhost:8000',
+   *       description: 'Customer support agent',
+   *     },
+   *     {
+   *       name: 'technical',
+   *       url: 'http://localhost:8001',
+   *       description: 'Technical assistant',
+   *     },
+   *   ]}
+   * >
+   *   // Your app
+   * </CopilotKit>
+   * ```
+   */
+  aguiAgents?: AguiAgentConfig[];
 
   /**
    * The endpoint for the Copilot transcribe audio service.

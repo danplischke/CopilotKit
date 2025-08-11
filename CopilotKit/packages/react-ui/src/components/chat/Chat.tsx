@@ -122,6 +122,11 @@ export type ChatSuggestions = "auto" | "manual" | SuggestionItem[];
  */
 export interface CopilotChatProps {
   /**
+   * Preferred agent to run when using AG-UI runtime clients.
+   * If provided, the chat will initialize and run with this agent.
+   */
+  agentName?: string;
+  /**
    * Custom instructions to be added to the system message. Use this property to
    * provide additional context or guidance to the language model, influencing
    * its responses. These instructions can include specific directions,
@@ -380,6 +385,7 @@ export type ImageUpload = {
 };
 
 export function CopilotChat({
+  agentName,
   instructions,
   suggestions = "auto",
   onSubmitMessage,
@@ -588,6 +594,7 @@ export function CopilotChat({
     onSubmitMessage,
     onStopGeneration,
     onReloadMessages,
+    agentName,
   );
 
   // Track loading state changes for chat start/stop events
@@ -793,6 +800,7 @@ export const useCopilotChatLogic = (
   onSubmitMessage?: (messageContent: string) => Promise<void> | void,
   onStopGeneration?: OnStopGeneration,
   onReloadMessages?: OnReloadMessages,
+  agentName?: string,
 ) => {
   const {
     messages,
@@ -809,6 +817,7 @@ export const useCopilotChatLogic = (
     isLoadingSuggestions,
   } = useCopilotChat({
     makeSystemMessage,
+    agentName,
   });
 
   const generalContext = useCopilotContext();

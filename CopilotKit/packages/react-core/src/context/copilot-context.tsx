@@ -21,6 +21,7 @@ import {
   ForwardedParametersInput,
 } from "@copilotkit/runtime-client-gql";
 import { Agent } from "@copilotkit/runtime-client-gql";
+import { UnifiedRuntimeClient } from "../hooks/use-unified-runtime-client";
 import {
   LangGraphInterruptAction,
   LangGraphInterruptActionSetter,
@@ -196,7 +197,8 @@ export interface CopilotContextParams {
   chatAbortControllerRef: React.MutableRefObject<AbortController | null>;
 
   // runtime
-  runtimeClient: CopilotRuntimeClient;
+  runtimeClient: any;
+  unifiedRuntimeClient: UnifiedRuntimeClient;
 
   /**
    * The forwarded parameters to use for the task.
@@ -266,6 +268,7 @@ const emptyCopilotContext: CopilotContextParams = {
   addDocumentContext: () => returnAndThrowInDebug(""),
   removeDocumentContext: () => {},
   runtimeClient: {} as any,
+  unifiedRuntimeClient: { type: 'graphql', client: {} as any } as any,
 
   copilotApiConfig: new (class implements CopilotApiConfig {
     get chatApiEndpoint(): string {

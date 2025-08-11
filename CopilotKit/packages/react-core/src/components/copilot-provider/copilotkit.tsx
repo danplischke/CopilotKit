@@ -43,7 +43,7 @@ import { CoagentState } from "../../types/coagent-state";
 import { CopilotMessages, MessagesTapProvider } from "./copilot-messages";
 import { ToastProvider } from "../toast/toast-provider";
 import { getErrorActions, UsageBanner } from "../usage-banner";
-import { useCopilotRuntimeClient } from "../../hooks/use-copilot-runtime-client";
+import { useUnifiedRuntimeClient, getRuntimeClient, isAguiClient, isGraphQLClient } from "../../hooks/use-unified-runtime-client";
 import { shouldShowDevConsole } from "../../utils";
 import { CopilotErrorBoundary } from "../error-boundary/error-boundary";
 import { Agent, ExtensionsInput } from "@copilotkit/runtime-client-gql";
@@ -267,14 +267,17 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     };
   }, [copilotApiConfig.headers, copilotApiConfig.publicApiKey, authStates]);
 
-  const runtimeClient = useCopilotRuntimeClient({
+  const unifiedRuntimeClient = useUnifiedRuntimeClient({
     url: copilotApiConfig.chatApiEndpoint,
     publicApiKey: copilotApiConfig.publicApiKey,
     headers,
     credentials: copilotApiConfig.credentials,
+    aguiAgents: props.aguiAgents,
     showDevConsole: shouldShowDevConsole(props.showDevConsole),
     onError: props.onError,
   });
+
+  const runtimeClient = getRuntimeClient(unifiedRuntimeClient);
 
   const [chatSuggestionConfiguration, setChatSuggestionConfiguration] = useState<{
     [key: string]: CopilotChatSuggestionConfiguration;
@@ -320,14 +323,36 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
     if (hasLoadedAgents.current) return;
 
     const fetchData = async () => {
-      const result = await runtimeClient.availableAgents();
-      if (result.data?.availableAgents) {
-        setAvailableAgents(result.data.availableAgents.agents);
+      if (isGraphQLClient(unifiedRuntimeClient)) {
+        const result = await runtimeClient.availableAgents();
+        const agents = (result as any)?.data?.availableAgents?.agents as Agent[] | undefined;
+        if (agents) {
+          setAvailableAgents(agents);
+        }
+      } else if (isAguiClient(unifiedRuntimeClient)) {
+        try {
+          const agents = await (runtimeClient as any).availableAgents();
+          setAvailableAgents(agents.map((agent: any) => ({
+            name: agent.name,
+            id: agent.id,
+            description: agent.description,
+          })));
+        } catch (error) {
+          console.warn('Failed to fetch ag_ui agents:', error);
+          // For ag_ui clients, we can use the configured agents as fallback
+          if (props.aguiAgents) {
+            setAvailableAgents(props.aguiAgents.map(agent => ({
+              name: agent.name,
+              id: agent.name,
+              description: agent.description || '',
+            })));
+          }
+        }
       }
       hasLoadedAgents.current = true;
     };
     void fetchData();
-  }, []);
+  }, [unifiedRuntimeClient, props.aguiAgents]);
 
   let initialAgentSession: AgentSession | null = null;
   if (props.agent) {
@@ -469,6 +494,7 @@ export function CopilotKitInternal(cpkProps: CopilotKitProps) {
         agentSession,
         setAgentSession,
         runtimeClient,
+        unifiedRuntimeClient,
         forwardedParameters,
         agentLock,
         threadId: internalThreadId,
@@ -544,7 +570,9 @@ function formatFeatureName(featureName: string): string {
 function validateProps(props: CopilotKitProps): never | void {
   const cloudFeatures = Object.keys(props).filter((key) => key.endsWith("_c"));
 
-  if (!props.runtimeUrl && !props.publicApiKey) {
+  // Allow AGUI-only configuration when aguiAgents are provided
+  const hasAguiAgents = Array.isArray((props as any).aguiAgents) && (props as any).aguiAgents.length > 0;
+  if (!props.runtimeUrl && !props.publicApiKey && !hasAguiAgents) {
     throw new ConfigurationError("Missing required prop: 'runtimeUrl' or 'publicApiKey'");
   }
 

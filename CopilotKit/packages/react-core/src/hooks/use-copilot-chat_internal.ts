@@ -41,6 +41,13 @@ export interface UseCopilotChatOptions {
    * A function to generate the system message. Defaults to `defaultSystemMessage`.
    */
   makeSystemMessage?: SystemMessageFunction;
+
+  /**
+   * Preferred agent to run when using AG-UI runtime clients. If provided, the
+   * chat will initialize and reset with this agent locked in the session, so
+   * runtime requests include an `agentSession` with `agentName`.
+   */
+  agentName?: string;
 }
 
 export interface MCPServerConfig {
@@ -452,9 +459,11 @@ export function useCopilotChat(options: UseCopilotChatOptions = {}): UseCopilotC
     setRunId(null);
     setCoagentStatesWithRef({});
     let initialAgentSession: AgentSession | null = null;
-    if (agentLock) {
+    const preferredAgent = (options as any)?.agentName;
+    const resolvedAgent = preferredAgent || agentLock || null;
+    if (resolvedAgent) {
       initialAgentSession = {
-        agentName: agentLock,
+        agentName: resolvedAgent as string,
       };
     }
     setAgentSession(initialAgentSession);
@@ -474,6 +483,14 @@ export function useCopilotChat(options: UseCopilotChatOptions = {}): UseCopilotC
   const latestResetFunc = useCallback(() => {
     return latestReset.current();
   }, [latestReset]);
+
+  // Ensure an initial agent session exists when an agent is preferred/locked
+  useEffect(() => {
+    const preferred = (options as any)?.agentName || agentLock || null;
+    if (!agentSession && preferred) {
+      setAgentSession({ agentName: preferred as string });
+    }
+  }, [agentSession, agentLock, options, setAgentSession]);
 
   const interrupt = useLangGraphInterruptRender();
 

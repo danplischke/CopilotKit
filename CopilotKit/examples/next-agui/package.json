@@ -1,0 +1,46 @@
+{
+  "name": "next-agui",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "example-dev": "next dev",
+    "example-build": "next build",
+    "example-start": "next start",
+    "lint": "next lint",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist && rm -rf .next",
+    "mock-servers": "concurrently \"node mock-agui-server.js 8000 support\" \"node mock-agui-server.js 8001 technical\" \"node mock-agui-server.js 8002 creative\"",
+    "dev-with-mocks": "concurrently \"pnpm example-dev\" \"pnpm mock-servers\"",
+    "agents-install": "python3 -m venv .venv && . .venv/bin/activate && pip install -r agents/requirements.txt",
+    "agents-run": ". .venv/bin/activate && python agents/run_agents.py",
+    "dev-with-agents": "concurrently \"pnpm example-dev\" \"pnpm agents-run\""
+  },
+  "dependencies": {
+    "@copilotkit/react-core": "workspace:*",
+    "@copilotkit/react-ui": "workspace:*",
+    "@copilotkit/runtime-client-agui": "workspace:*",
+    "@copilotkit/shared": "workspace:*",
+    "@heroicons/react": "^2.0.18",
+    "clsx": "^1.2.1",
+    "next": "^15.0.2",
+    "next-themes": "^0.2.1",
+    "react": "19.0.0-rc-0bc30748-20241028",
+    "react-dom": "19.0.0-rc-0bc30748-20241028",
+    "react-markdown": "^8.0.7",
+    "use-stick-to-bottom": "^1.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^18.11.17",
+    "@types/react": "^18.2.5",
+    "@types/react-dom": "^18.2.4",
+    "autoprefixer": "^10.4.13",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint-config-custom": "workspace:*",
+    "postcss": "^8.4.20",
+    "tailwind-config": "workspace:*",
+    "tailwindcss": "^3.2.4",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.2.3"
+  }
+}

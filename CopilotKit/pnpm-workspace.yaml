@@ -1,4 +1,10 @@
 packages:
-  - "examples/*"
-  - "packages/*"
-  - "utilities/*"
+  - examples/*
+  - packages/*
+  - utilities/*
+
+ignoredBuiltDependencies:
+  - '@scarf/scarf'
+  - '@swc/core'
+  - esbuild
+  - sharp

@@ -39,7 +39,7 @@ import { CopilotApiConfig } from "../context";
 import { FrontendAction, processActionsForRuntimeRequest } from "../types/frontend-action";
 import { CoagentState } from "../types/coagent-state";
 import { AgentSession, useCopilotContext } from "../context/copilot-context";
-import { useCopilotRuntimeClient } from "./use-copilot-runtime-client";
+import { useUnifiedRuntimeClient, getRuntimeClient, isAguiClient, isGraphQLClient } from "./use-unified-runtime-client";
 import { useAsyncCallback, useErrorToast } from "../components/error-boundary/error-utils";
 import { useToast } from "../components/toast/toast-provider";
 import {
@@ -280,13 +280,9 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
   const { showDevConsole } = useCopilotContext();
 
-  const runtimeClient = useCopilotRuntimeClient({
-    url: copilotConfig.chatApiEndpoint,
-    publicApiKey: copilotConfig.publicApiKey,
-    headers,
-    credentials: copilotConfig.credentials,
-    showDevConsole,
-  });
+  // Get the unified runtime client from context
+  const { unifiedRuntimeClient } = useCopilotContext();
+  const runtimeClient = getRuntimeClient(unifiedRuntimeClient);
 
   const pendingAppendsRef = useRef<{ message: Message; followUp: boolean }[]>([]);
 
@@ -361,7 +357,7 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
       const isAgentRun = agentSessionRef.current !== null;
 
-      const stream = runtimeClient.asStream(
+      const stream = (runtimeClient as any).asStream(
         runtimeClient.generateCopilotResponse({
           data: {
             frontend: {
@@ -369,10 +365,13 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
               url: window.location.href,
             },
             threadId: threadId,
-            runId: runIdRef.current,
+            runId: runIdRef.current || undefined,
             extensions: extensionsRef.current,
             metaEvents: composeAndFlushMetaEventsInput([langGraphInterruptAction?.event]),
-            messages: convertMessagesToGqlInput(filterAgentStateMessages(messagesWithContext)),
+            messages: isAguiClient(unifiedRuntimeClient)
+              ? filterAgentStateMessages(messagesWithContext)
+              : convertMessagesToGqlInput(filterAgentStateMessages(messagesWithContext)),
+            agentName: agentSessionRef.current?.agentName || agentLock || undefined,
             ...(copilotConfig.cloud
               ? {
                   cloud: {
@@ -394,10 +393,10 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
             metadata: {
               requestType: CopilotRequestType.Chat,
             },
-            ...(agentSessionRef.current
-              ? {
-                  agentSession: agentSessionRef.current,
-                }
+            ...(agentSessionRef.current?.agentName
+              ? { agentSession: agentSessionRef.current }
+              : agentLock
+              ? { agentSession: { agentName: agentLock } as any }
               : {}),
             agentStates: Object.values(coagentStatesRef.current!).map((state) => {
               const stateObject: AgentStateInput = {
@@ -411,7 +410,7 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
 
               return stateObject;
             }),
-            forwardedParameters: options.forwardedParameters || {},
+            forwardedParameters: (options.forwardedParameters as any) || {},
           },
           properties: finalProperties,
           signal: chatAbortControllerRef.current?.signal,
@@ -482,7 +481,7 @@ export function useChat(options: UseChatOptions): UseChatHelpers {
             if (ev.name === MetaEventName.CopilotKitLangGraphInterruptEvent) {
               const data = (ev as CopilotKitLangGraphInterruptEvent).data;
 
-              // @ts-expect-error -- same type of messages
+              // same type of messages
               rawMessagesResponse = [...rawMessagesResponse, ...data.messages];
               interruptMessages = convertGqlOutputToMessages(
                 // @ts-ignore
